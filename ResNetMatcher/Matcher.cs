@@ -28,7 +28,7 @@ namespace ResNetMatcher {
 
             tasks = new Task[Environment.ProcessorCount];
             for (int i = 0; i < Environment.ProcessorCount; ++i)
-                tasks[i] = Task.Factory.StartNew(() => {
+                tasks[i] = Task.Run(() => {
                     if (tokenSource.Token.IsCancellationRequested)
                         return;
 
