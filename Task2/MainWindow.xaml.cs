@@ -49,6 +49,7 @@ namespace Task2 {
 
         private void MatchClicked(object sender, RoutedEventArgs e) {
             dataView.StartMatching();
+            Console.WriteLine("AfterClicked");
         }
 
         private void StopClicked(object sender, RoutedEventArgs e) {

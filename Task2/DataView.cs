@@ -9,6 +9,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows;
 
 // DataView + Data
 namespace Task2 {
@@ -63,7 +64,10 @@ namespace Task2 {
                 IsMatchEnabled = true;
                 OnPropertyChanged("DirName");
                 OnPropertyChanged("IsDirSelected");
-                matched.Clear();
+                for (int i = 0; i < Labels.classLabels.Length; ++i) {
+                    matchedCount[i].Count = 0;
+                    matchedResult[i].Clear();
+                }
                 OnPropertyChanged("ClassList");
                 OnPropertyChanged("ClassMatchResult");
             }
@@ -93,39 +97,46 @@ namespace Task2 {
         }
 
         public class MatchResult {
-            public string imagePath;
-            public int classId;
-            public string className;
+            public string Image { get; set; }
+            public string ClassName { get; set; }
         }
 
-        private List<MatchResult> matched = new List<MatchResult>();
+        public class CountResult {
+            public string ClassName { get; set; }
+            public int Count { get; set; }
+        }
+
+        private CountResult[] matchedCount = new CountResult[Labels.classLabels.Length];
+        private List<MatchResult>[] matchedResult = new List<MatchResult>[Labels.classLabels.Length];
 
         public IEnumerable ClassList {
             // get => from match in matched group match by match.classId into g select new { Count = g.Count(), ClassName = g.First().className };
             get {
-                var count = from match in matched group match by match.classId into g select new { Count = g.Count(), ClassName = g.First().className };
-                return from label in Labels.classLabels select new { ClassName = label, Count = (from c in count where c.ClassName == label select c.Count).FirstOrDefault() };
+                return matchedCount;
+                // var count = from match in matched group match by match.classId into g select new { Count = g.Count(), ClassName = g.First().className };
+                // return from label in Labels.classLabels select new { ClassName = label, Count = (from c in count where c.ClassName == label select c.Count).FirstOrDefault() };
             }
             // get => from match, label in matched, Labels.classLabels group match by match.classId into g select new { Count = g.Count(), ClassName = g.First().className };
         }
 
-        public int classAtList(int i) {
-            return SelectedClassId == -1 ? -1 : (from match in matched group match by match.classId into g select new { classId = g.First().classId }).ElementAt(i).classId;
-        }
-
         public IEnumerable ClassMatchResult {
             get {
-                return from match in matched where match.classId == selectedClassId select new { ClassName = match.className, Image = match.imagePath };
+                return matchedResult[SelectedClassId];
+                    // from match in matched where match.classId == selectedClassId select new { ClassName = match.className, Image = match.imagePath };
             }
             set { }
         }
 
         [MethodImpl(MethodImplOptions.Synchronized)]
         public void matchHandler(string fileName, int classId, float match) {
-            matched.Add(new MatchResult() { imagePath = fileName, classId = classId, className = Labels.classLabels[classId] });
+            // matched.Add(new MatchResult() { imagePath = fileName, classId = classId, className = Labels.classLabels[classId] });
+            matchedCount[classId].Count++;
+            matchedResult[classId].Add(new MatchResult { ClassName = Labels.classLabels[classId], Image = fileName });
 
-            OnPropertyChanged("ClassList");
-            OnPropertyChanged("ClassMatchResult");
+            Application.Current.Dispatcher.Invoke(new Action(() => {
+                OnPropertyChanged("ClassList");
+                OnPropertyChanged("ClassMatchResult");
+            }));
         }
 
         Matcher matcher = new Matcher();
@@ -142,7 +153,10 @@ namespace Task2 {
         }
 
         public DataView() {
-
+            for (int i = 0; i < Labels.classLabels.Length; ++i) {
+                matchedCount[i] = new CountResult { Count = 0, ClassName = Labels.classLabels[i] };
+                matchedResult[i] = new List<MatchResult>();
+            }
         }
     }
 }

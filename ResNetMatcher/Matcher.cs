@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 namespace ResNetMatcher {
     public class Matcher {
         private InferenceSession session;
-        private ConcurrentQueue<string> images;
+        private ConcurrentQueue<string> images = new ConcurrentQueue<string>();
         Action<string, int, float> async_handler;
         CancellationTokenSource tokenSource;
         Task[] tasks;
@@ -74,7 +74,7 @@ namespace ResNetMatcher {
         }
 
         private Tuple<int, float> PredictImage(Tensor<float> tensor) {
-            var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor("input", tensor) };
+            var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor("data", tensor) };
             using IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results = session.Run(inputs);
 
             var output = results.First().AsEnumerable<float>().ToArray();
