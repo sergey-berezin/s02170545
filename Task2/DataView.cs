@@ -99,6 +99,7 @@ namespace Task2 {
         public class MatchResult {
             public string Image { get; set; }
             public string ClassName { get; set; }
+            public int StoreCount { get; set; }
         }
 
         public class CountResult {
@@ -126,12 +127,11 @@ namespace Task2 {
             }
             set { }
         }
-
+        
         [MethodImpl(MethodImplOptions.Synchronized)]
-        public void matchHandler(string fileName, int classId, float match) {
-            // matched.Add(new MatchResult() { imagePath = fileName, classId = classId, className = Labels.classLabels[classId] });
+        public void matchHandler(string fileName, int classId, int storeCount) {
             matchedCount[classId].Count++;
-            matchedResult[classId].Add(new MatchResult { ClassName = Labels.classLabels[classId], Image = fileName });
+            matchedResult[classId].Add(new MatchResult { ClassName = Labels.classLabels[classId], Image = fileName, StoreCount = storeCount });
 
             Application.Current.Dispatcher.Invoke(new Action(() => {
                 OnPropertyChanged("ClassList");
@@ -142,7 +142,11 @@ namespace Task2 {
         Matcher matcher = new Matcher();
 
         internal void StartMatching() {
-            // matchHandler("C:\\Users\\bitrate16\\Pictures\\Screenshots\\Screenshot (1).png", new Random().Next(0, Labels.classLabels.Length), 0.15131f);
+            for (int i = 0; i < Labels.classLabels.Length; ++i) {
+                matchedCount[i].Count = 0;
+                matchedResult[i].Clear();
+            }
+
             matcher.Match(matchHandler, dirName);
             IsMatching = true;
         }

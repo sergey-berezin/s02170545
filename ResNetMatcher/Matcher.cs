@@ -1,4 +1,5 @@
-﻿using Microsoft.ML.OnnxRuntime;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -12,14 +13,38 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace ResNetMatcher {
+
+    public class StorageContext : DbContext {
+        public DbSet<Result> Results { get; set; }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("DataSource=../../../../../ResNetMatcher/storage.db");
+    }
+
+    public class Result {
+        public int ResultId { get; set; }
+        public byte[] file { get; set; }
+        public int CallCount { get; set; }
+        public int ClassId { get; set; }
+    }
+
     public class Matcher {
         private InferenceSession session;
         private ConcurrentQueue<string> images = new ConcurrentQueue<string>();
-        Action<string, int, float> async_handler;
-        CancellationTokenSource tokenSource;
-        Task[] tasks;
+        private Action<string, int, int> async_handler;
+        private CancellationTokenSource tokenSource;
+        private Task[] tasks;
+        private StorageContext db;
 
-        public void Match(Action<string, int, float> async_handler, string model_data_path) {
+        public Matcher() {
+            db = new StorageContext();
+        }
+
+        // Action<string, int, float, int>
+        // string - path
+        // int - class id
+        // float - probability
+        // int - persistent storage call count for the image
+        public void Match(Action<string, int, int> async_handler, string model_data_path) {
             session = new InferenceSession(model_data_path + Path.DirectorySeparatorChar + "model.onnx");
             Array.ForEach(Directory.GetFiles(model_data_path + Path.DirectorySeparatorChar + "images"), p => images.Enqueue(p));
             this.async_handler = async_handler;
@@ -38,11 +63,80 @@ namespace ResNetMatcher {
                         if (tokenSource.Token.IsCancellationRequested)
                             return;
 
-                        var tensor = ReadImage(image);
-                        var predict = PredictImage(tensor);
-                        async_handler(image, predict.Item1, predict.Item2);
+                        // Check in persistent storage
+                        Tuple<int, int> persistent = PersistentPredict(image);
+
+                        if (persistent != null)
+                            async_handler(image, persistent.Item1, persistent.Item2);
+                        else {
+                            var tensor = ReadImage(image);
+                            int predict = PredictImage(tensor);
+
+                            // Insert new record into persistent storage
+                            PersistentAdd(image, predict);
+
+                            async_handler(image, predict, 0);
+                        }
                     }
                 }, tokenSource.Token);
+        }
+
+        public static int ComputeHash(params byte[] data) {
+            unchecked {
+                const int p = 16777619;
+                int hash = (int)2166136261;
+
+                for (int i = 0; i < data.Length; i++)
+                    hash = (hash ^ data[i]) * p;
+
+                hash += hash << 13;
+                hash ^= hash >> 7;
+                hash += hash << 3;
+                hash ^= hash >> 17;
+                hash += hash << 5;
+                return hash;
+            }
+        }
+
+        private Tuple<int, int> PersistentPredict(string path) {
+            try {
+                byte[] image = File.ReadAllBytes(path);
+                lock (db) {
+                    Result val = null;
+                    var pat = System.IO.Directory.GetCurrentDirectory();
+                    foreach (var p in db.Results) {
+                        if (ComputeHash(p.file) == ComputeHash(image) && p.file.SequenceEqual(image)) {
+                            val = p;
+                            break;
+                        }
+                    }
+                    //var pres = db.Results.AsEnumerable().Where(p => p.file.GetHashCode() == image.GetHashCode()).Where(p => p.file.SequenceEqual(image));
+                    // from res in db.Results where res.file.GetHashCode() == image.GetHashCode() select res;
+                    // var dres = from res in pres where res.file.SequenceEqual<byte>(image) select res;
+                    //var val = pres.SingleOrDefault(); // dres.ToList();
+
+                    if (val == null)
+                        return null;
+
+                    val.CallCount++;
+
+                    db.Update(val);
+                    db.SaveChanges();
+
+                    return new Tuple<int, int>(val.ClassId, val.CallCount);
+                }
+            } catch {
+                return null;
+            }
+        }
+
+        private void PersistentAdd(string path, int id) {
+            try {
+                lock (db) {
+                    db.Add(new Result { CallCount = 0, ClassId = id, file = File.ReadAllBytes(path) });
+                    db.SaveChanges();
+                }
+            } catch { }
         }
 
         private Tensor<float> ReadImage(string file) {
@@ -73,7 +167,7 @@ namespace ResNetMatcher {
             return input;
         }
 
-        private Tuple<int, float> PredictImage(Tensor<float> tensor) {
+        private int PredictImage(Tensor<float> tensor) {
             var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor("data", tensor) };
             using IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results = session.Run(inputs);
 
@@ -84,7 +178,7 @@ namespace ResNetMatcher {
             return softmax
                 .Select((x, i) => new Tuple<int, float>(i, x))
                 .OrderByDescending(x => x.Item2)
-                .Take(1).First();
+                .Take(1).First().Item1;
         }
 
         public void CancelMatch() {

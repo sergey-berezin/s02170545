@@ -29,6 +29,7 @@
                     <StackPanel Orientation="Vertical" VerticalAlignment="Stretch">
                         <Image Width="300px" Source="{Binding Image}" HorizontalAlignment="Center" VerticalAlignment="Top" />
                         <TextBlock Text="{Binding ClassName}" HorizontalAlignment="Center" VerticalAlignment="Bottom" />
+                        <TextBlock Text="{Binding StoreCount}" HorizontalAlignment="Center" VerticalAlignment="Bottom" />
                     </StackPanel>
                 </DataTemplate>
             </ListView.ItemTemplate>
