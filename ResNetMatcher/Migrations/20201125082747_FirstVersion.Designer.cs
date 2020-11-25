@@ -9,7 +9,7 @@ using ResNetMatcher;
 namespace ResNetMatcher.Migrations
 {
     [DbContext(typeof(StorageContext))]
-    [Migration("20201116184327_FirstVersion")]
+    [Migration("20201125082747_FirstVersion")]
     partial class FirstVersion
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -30,12 +30,37 @@ namespace ResNetMatcher.Migrations
                     b.Property<int>("ClassId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<byte[]>("file")
-                        .HasColumnType("BLOB");
+                    b.Property<int?>("ResultDataId")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("ResultId");
 
+                    b.HasIndex("ResultDataId");
+
                     b.ToTable("Results");
+                });
+
+            modelBuilder.Entity("ResNetMatcher.ResultData", b =>
+                {
+                    b.Property<int>("ResultDataId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("file")
+                        .HasColumnType("BLOB");
+
+                    b.HasKey("ResultDataId");
+
+                    b.ToTable("ResultData");
+                });
+
+            modelBuilder.Entity("ResNetMatcher.Result", b =>
+                {
+                    b.HasOne("ResNetMatcher.ResultData", "resultData")
+                        .WithMany()
+                        .HasForeignKey("ResultDataId");
+
+                    b.Navigation("resultData");
                 });
 #pragma warning restore 612, 618
         }

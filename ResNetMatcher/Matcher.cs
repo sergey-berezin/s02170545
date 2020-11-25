@@ -17,14 +17,19 @@ namespace ResNetMatcher {
     public class StorageContext : DbContext {
         public DbSet<Result> Results { get; set; }
 
-        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("DataSource=../../../../../ResNetMatcher/storage.db");
+        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("../../../../../ResNetMatcher/DataSource=storage.db");
+    }
+
+    public class ResultData {
+        public int ResultDataId { get; set; }
+        public byte[] file { get; set; }
     }
 
     public class Result {
         public int ResultId { get; set; }
-        public byte[] file { get; set; }
         public int CallCount { get; set; }
         public int ClassId { get; set; }
+        public ResultData resultData { get; set; }
     }
 
     public class Matcher {
@@ -105,7 +110,7 @@ namespace ResNetMatcher {
                     Result val = null;
                     var pat = System.IO.Directory.GetCurrentDirectory();
                     foreach (var p in db.Results) {
-                        if (ComputeHash(p.file) == ComputeHash(image) && p.file.SequenceEqual(image)) {
+                        if (ComputeHash(p.resultData.file) == ComputeHash(image) && p.resultData.file.SequenceEqual(image)) {
                             val = p;
                             break;
                         }
@@ -133,7 +138,7 @@ namespace ResNetMatcher {
         private void PersistentAdd(string path, int id) {
             try {
                 lock (db) {
-                    db.Add(new Result { CallCount = 0, ClassId = id, file = File.ReadAllBytes(path) });
+                    db.Add(new Result { CallCount = 0, ClassId = id, resultData = new ResultData { file = File.ReadAllBytes(path) } });
                     db.SaveChanges();
                 }
             } catch { }
