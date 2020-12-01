@@ -21,7 +21,8 @@ namespace ASPServer.Controllers {
             Console.WriteLine("Match : " + base64data);
             try {
                 byte[] file = Convert.FromBase64String(base64data);
-                return Matcher.Instance.Match(file);
+                Tuple<int, int> res = Matcher.Instance.Match(file);
+                return new MatchResult { ClassId = res.Item1, Statistics = res.Item2 };
                 //return new MatchResult { ClassId = 13, Statistics = 13 };
             } catch {
                 return new StatusCodeResult(500);
