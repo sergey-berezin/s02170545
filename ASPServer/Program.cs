@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 namespace ASPServer {
     public class Program {
         public static void Main(string[] args) {
+            Matcher.Init();
+
             CreateHostBuilder(args).Build().Run();
         }
 

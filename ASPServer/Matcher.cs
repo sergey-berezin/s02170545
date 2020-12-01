@@ -1,31 +1,23 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Runtime.Remoting;
-using System.Runtime.Remoting.Channels;
-using System.Runtime.Remoting.Channels.Tcp;
-using Contracts;
 using System.Runtime.CompilerServices;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Configuration;
+using System.Threading.Tasks;
 
-namespace Server {
+namespace ASPServer {
+    // dotnet ef migrations add FirstVersion
+    // dotnet ef database update
 
     public class StorageContext : DbContext {
         public DbSet<Result> Results { get; set; }
 
-        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("DataSource=../../../../../Server/storage.db");
+        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("DataSource=../../../../storage.db");
     }
 
     public class ResultData {
@@ -42,14 +34,30 @@ namespace Server {
 
     public class Matcher {
 
-        public const string MODEL_PATH = "../../../../../Server/model.onnx";
+        public static Matcher Instance = null;
+
+        public static void Init() {
+            Instance = new Matcher();
+        }
+
+        public void Clear() {
+            lock (db) {
+                db.RemoveRange(db);
+            }
+        }
+
+        public const string MODEL_PATH = "../../../../model.onnx";
 
         private InferenceSession session;
-        private StorageContext db;
+        public StorageContext db;
 
         public Matcher() {
+            Console.WriteLine("Loading database");
             db = new StorageContext();
+            Console.WriteLine("Loaded database");
+            Console.WriteLine("Loading model");
             session = new InferenceSession(MODEL_PATH);
+            Console.WriteLine("Loaded model");
         }
 
         // Write file to temp location & check the db, read file as image & process
@@ -166,41 +174,6 @@ namespace Server {
                 .Select((x, i) => new Tuple<int, float>(i, x))
                 .OrderByDescending(x => x.Item2)
                 .Take(1).First().Item1;
-        }
-    }
-
-    public class Match : MarshalByRefObject, IMatch {
-        
-        private Matcher matcher;
-
-        public Match() : base() {
-            matcher = new Matcher();
-        }
-
-        Tuple<int, int> IMatch.Match(byte[] file) {
-            try {
-                // return matcher.Match(file);
-                return new Tuple<int, int>(0, 0);
-            } catch {
-                return null;
-            }
-        }
-    }
-
-    class Program {
-
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args).ConfigureWebHostDefaults(webBuilder => {
-                webBuilder.UseStartup<Startup>();
-            });
-
-        static void Main(string[] args) {
-            var m = new Match();
-            ChannelServices.RegisterChannel(new TcpChannel(8080), false);
-            RemotingServices.Marshal(m, "match");
-            Console.ReadLine();
-
-            CreateHostBuilder(args).Build().Run();
         }
     }
 }
