@@ -1,23 +1,25 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
-namespace ResNetMatcher {
+namespace ASPServer {
+    // dotnet ef migrations add FirstVersion
+    // dotnet ef database update
 
     public class StorageContext : DbContext {
         public DbSet<Result> Results { get; set; }
+        public DbSet<ResultData> ResultsData { get; set; }
 
-        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("../../../../../ResNetMatcher/DataSource=storage.db");
+        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("DataSource=storage.db");
     }
 
     public class ResultData {
@@ -33,57 +35,56 @@ namespace ResNetMatcher {
     }
 
     public class Matcher {
-        private InferenceSession session;
-        private ConcurrentQueue<string> images = new ConcurrentQueue<string>();
-        private Action<string, int, int> async_handler;
-        private CancellationTokenSource tokenSource;
-        private Task[] tasks;
-        private StorageContext db;
 
-        public Matcher() {
-            db = new StorageContext();
+        public static Matcher Instance = null;
+
+        public static void Init() {
+            Instance = new Matcher();
         }
 
-        // Action<string, int, float, int>
-        // string - path
-        // int - class id
-        // float - probability
-        // int - persistent storage call count for the image
-        public void Match(Action<string, int, int> async_handler, string model_data_path) {
-            session = new InferenceSession(model_data_path + Path.DirectorySeparatorChar + "model.onnx");
-            Array.ForEach(Directory.GetFiles(model_data_path + Path.DirectorySeparatorChar + "images"), p => images.Enqueue(p));
-            this.async_handler = async_handler;
+        public void Clear() {
+            lock (db) {
+                db.Results.RemoveRange(db.Results);
+                db.ResultsData.RemoveRange(db.ResultsData);
+                db.SaveChanges();
+            }
+        }
 
-            tokenSource = new CancellationTokenSource();
+        public const string MODEL_PATH = "model.onnx";
 
-            tasks = new Task[Environment.ProcessorCount];
-            for (int i = 0; i < Environment.ProcessorCount; ++i)
-                tasks[i] = Task.Run(() => {
-                    if (tokenSource.Token.IsCancellationRequested)
-                        return;
+        private InferenceSession session;
+        public StorageContext db;
 
-                    string image;
+        public Matcher() {
+            Console.WriteLine("Loading database");
+            db = new StorageContext();
+            Console.WriteLine("Loaded database");
+            Console.WriteLine("Loading model");
+            session = new InferenceSession(MODEL_PATH);
+            Console.WriteLine("Loaded model");
 
-                    while (images.TryDequeue(out image)) {
-                        if (tokenSource.Token.IsCancellationRequested)
-                            return;
+            db.Results.RemoveRange(db.Results);
+            db.ResultsData.RemoveRange(db.ResultsData);
+            db.SaveChanges();
+        }
 
-                        // Check in persistent storage
-                        Tuple<int, int> persistent = PersistentPredict(image);
+        // Write file to temp location & check the db, read file as image & process
+        public Tuple<int, int> Match(byte[] image) {
 
-                        if (persistent != null)
-                            async_handler(image, persistent.Item1, persistent.Item2);
-                        else {
-                            var tensor = ReadImage(image);
-                            int predict = PredictImage(tensor);
+            // Check in persistent storage
+            Tuple<int, int> persistent = PersistentPredict(image);
 
-                            // Insert new record into persistent storage
-                            PersistentAdd(image, predict);
+            if (persistent != null)
+                return new Tuple<int, int>(persistent.Item1, persistent.Item2);
+            else {
+                var tensor = ToTensor(image);
+                int predict = PredictImage(tensor);
 
-                            async_handler(image, predict, 0);
-                        }
-                    }
-                }, tokenSource.Token);
+                // Insert new record into persistent storage
+                PersistentAdd(image, predict);
+
+                return new Tuple<int, int>(predict, 0);
+            }
         }
 
         public static int ComputeHash(params byte[] data) {
@@ -103,22 +104,18 @@ namespace ResNetMatcher {
             }
         }
 
-        private Tuple<int, int> PersistentPredict(string path) {
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        private Tuple<int, int> PersistentPredict(byte[] image) {
             try {
-                byte[] image = File.ReadAllBytes(path);
                 lock (db) {
                     Result val = null;
                     var pat = System.IO.Directory.GetCurrentDirectory();
-                    foreach (var p in db.Results) {
+                    foreach (var p in db.Results.Include(p => p.resultData)) {
                         if (ComputeHash(p.resultData.file) == ComputeHash(image) && p.resultData.file.SequenceEqual(image)) {
                             val = p;
                             break;
                         }
                     }
-                    //var pres = db.Results.AsEnumerable().Where(p => p.file.GetHashCode() == image.GetHashCode()).Where(p => p.file.SequenceEqual(image));
-                    // from res in db.Results where res.file.GetHashCode() == image.GetHashCode() select res;
-                    // var dres = from res in pres where res.file.SequenceEqual<byte>(image) select res;
-                    //var val = pres.SingleOrDefault(); // dres.ToList();
 
                     if (val == null)
                         return null;
@@ -130,22 +127,31 @@ namespace ResNetMatcher {
 
                     return new Tuple<int, int>(val.ClassId, val.CallCount);
                 }
-            } catch {
+            } catch (Exception e) {
+                Trace.WriteLine(e);
                 return null;
             }
         }
 
-        private void PersistentAdd(string path, int id) {
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        private void PersistentAdd(byte[] image, int id) {
             try {
                 lock (db) {
-                    db.Add(new Result { CallCount = 0, ClassId = id, resultData = new ResultData { file = File.ReadAllBytes(path) } });
+                    ResultData rd = new ResultData { file = image };
+                    Result r = new Result { CallCount = 0, ClassId = id };
+                    r.resultData = rd;
+
+                    db.Results.Add(r);
+                    db.ResultsData.Add(rd);
                     db.SaveChanges();
                 }
-            } catch { }
+            } catch (Exception e) {
+                Trace.WriteLine(e);
+            }
         }
 
-        private Tensor<float> ReadImage(string file) {
-            using var image = Image.Load<Rgb24>(file);
+        private Tensor<float> ToTensor(byte[] file) {
+            var image = Image.Load<Rgb24>(file);
 
             const int TargetWidth = 224;
             const int TargetHeight = 224;
@@ -174,7 +180,7 @@ namespace ResNetMatcher {
 
         private int PredictImage(Tensor<float> tensor) {
             var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor("data", tensor) };
-            using IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results = session.Run(inputs);
+            IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results = session.Run(inputs);
 
             var output = results.First().AsEnumerable<float>().ToArray();
             var sum = output.Sum(x => (float)Math.Exp(x));
@@ -184,10 +190,6 @@ namespace ResNetMatcher {
                 .Select((x, i) => new Tuple<int, float>(i, x))
                 .OrderByDescending(x => x.Item2)
                 .Take(1).First().Item1;
-        }
-
-        public void CancelMatch() {
-            tokenSource.Cancel();
         }
     }
 }

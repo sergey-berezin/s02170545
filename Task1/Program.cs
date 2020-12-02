@@ -6,11 +6,11 @@ using System.Threading;
 namespace Task1 {
     class Program {
 
-        static void Callback(string image, int id, float prob) {
+        static void Callback(string image, int id, int storeCount) {
             // I/O operations using these streams are synchronized, 
             //  which means multiple threads can read from, or write to, 
             //  the streams.
-            Console.WriteLine($"{image} is: {Labels.classLabels[id]} with: {prob}");
+            Console.WriteLine($"{image} is: {Labels.classLabels[id]}");
         }
 
         static void Main(string[] args) {
