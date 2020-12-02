@@ -7,7 +7,7 @@ namespace ASPServer.Controllers {
     [Route("api/[controller]")]
     public class MatchResultController : ControllerBase {
 
-        [HttpGet]
+        [HttpDelete]
         public string GetMatch() {
             lock (Matcher.Instance.db) { 
                 Matcher.Instance.db.Results.RemoveRange(Matcher.Instance.db.Results);

@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -16,6 +17,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 // DataView + Data
 namespace WPFClient {
@@ -25,8 +28,9 @@ namespace WPFClient {
 
     public class StorageContext : DbContext {
         public DbSet<Result> Results { get; set; }
+        public DbSet<ResultData> ResultsData { get; set; }
 
-        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("DataSource=../../../storage.db");
+        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("DataSource=storage.db");
     }
 
     public class ResultData {
@@ -129,9 +133,25 @@ namespace WPFClient {
         }
 
         public class MatchResult {
-            public Image Image { get; set; }
+            public ImageSource Image { get; set; }
             public string ClassName { get; set; }
             public int StoreCount { get; set; }
+        }
+
+        public ImageSource ToImageSource(Image image) {
+            using (var ms = new MemoryStream()) {
+                image.Save(ms, ImageFormat.Bmp);
+                ms.Seek(0, SeekOrigin.Begin);
+
+                var bitmapImage = new BitmapImage();
+                bitmapImage.BeginInit();
+                bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
+                bitmapImage.StreamSource = ms;
+                bitmapImage.EndInit();
+                bitmapImage.Freeze();
+
+                return bitmapImage;
+            }
         }
 
         public class CountResult {
@@ -163,7 +183,7 @@ namespace WPFClient {
         [MethodImpl(MethodImplOptions.Synchronized)]
         public void matchHandler(string fileName, int classId, int storeCount) {
             matchedCount[classId].Count++;
-            matchedResult[classId].Add(new MatchResult { ClassName = Labels.classLabels[classId], Image = Image.FromFile(fileName), StoreCount = storeCount });
+            matchedResult[classId].Add(new MatchResult { ClassName = Labels.classLabels[classId], Image = ToImageSource(Image.FromFile(fileName)), StoreCount = storeCount });
 
             Application.Current.Dispatcher.Invoke(new Action(() => {
                 OnPropertyChanged("ClassList");
@@ -199,7 +219,7 @@ namespace WPFClient {
 
                         matchHandler(image, res.Item1, res.Item2);
                     } catch (Exception e) {
-                        Trace.WriteLine("Exc: " + e);
+                        Trace.WriteLine("Exception during request: " + e);
                         // Nothing else, ignore
                     }
                 }
@@ -273,7 +293,7 @@ namespace WPFClient {
                 lock (db) {
                     Result val = null;
                     var pat = System.IO.Directory.GetCurrentDirectory();
-                    foreach (var p in db.Results) {
+                    foreach (var p in db.Results.Include(p => p.resultData)) {
                         if (ComputeHash(p.resultData.file) == ComputeHash(image) && p.resultData.file.SequenceEqual(image)) {
                             val = p;
                             break;
@@ -290,7 +310,8 @@ namespace WPFClient {
 
                     return new Tuple<int, int>(val.ClassId, val.CallCount);
                 }
-            } catch {
+            } catch (Exception e) {
+                Trace.WriteLine(e);
                 return null;
             }
         }
@@ -304,9 +325,12 @@ namespace WPFClient {
                     r.resultData = rd;
 
                     db.Results.Add(r);
+                    db.ResultsData.Add(rd);
                     db.SaveChanges();
                 }
-            } catch { }
+            } catch (Exception e) {
+                Trace.WriteLine(e);
+            }
         }
 
         public DataView() {
@@ -318,8 +342,11 @@ namespace WPFClient {
             Trace.WriteLine("Loading DB");
             // Load local database
             db = new StorageContext();
+
             //db.Results.RemoveRange(db.Results);
+            //db.ResultsData.RemoveRange(db.ResultsData);
             //db.SaveChanges();
+
             Trace.WriteLine("Loaded DB");
 
             Trace.WriteLine("Adding DB");
@@ -332,11 +359,12 @@ namespace WPFClient {
             
             
             lock (db) {
-                foreach (var p in db.Results) {
+                foreach (var p in db.Results.Include(p => p.resultData)) {
+                    // db.Entry(p).Reference(p => p.resultData).Load();
                     matchedCount[p.ClassId].Count++;
                     matchedResult[p.ClassId].Add(new MatchResult { 
                         ClassName = Labels.classLabels[p.ClassId], 
-                        Image = System.Drawing.Image.FromStream(new MemoryStream(p.resultData.file)), 
+                        Image = ToImageSource(System.Drawing.Image.FromStream(new MemoryStream(p.resultData.file))), 
                         StoreCount = p.CallCount 
                     });
                 }

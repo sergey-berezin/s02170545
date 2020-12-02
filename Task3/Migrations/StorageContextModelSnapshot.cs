@@ -49,7 +49,7 @@ namespace WPFClient.Migrations
 
                     b.HasKey("ResultDataId");
 
-                    b.ToTable("ResultData");
+                    b.ToTable("ResultsData");
                 });
 
             modelBuilder.Entity("WPFClient.Result", b =>

@@ -9,6 +9,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace ASPServer {
     // dotnet ef migrations add FirstVersion
@@ -16,8 +17,9 @@ namespace ASPServer {
 
     public class StorageContext : DbContext {
         public DbSet<Result> Results { get; set; }
+        public DbSet<ResultData> ResultsData { get; set; }
 
-        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("DataSource=../../../../storage.db");
+        protected override void OnConfiguring(DbContextOptionsBuilder o) => o.UseSqlite("DataSource=storage.db");
     }
 
     public class ResultData {
@@ -42,11 +44,13 @@ namespace ASPServer {
 
         public void Clear() {
             lock (db) {
-                db.RemoveRange(db);
+                db.Results.RemoveRange(db.Results);
+                db.ResultsData.RemoveRange(db.ResultsData);
+                db.SaveChanges();
             }
         }
 
-        public const string MODEL_PATH = "../../../../model.onnx";
+        public const string MODEL_PATH = "model.onnx";
 
         private InferenceSession session;
         public StorageContext db;
@@ -58,6 +62,10 @@ namespace ASPServer {
             Console.WriteLine("Loading model");
             session = new InferenceSession(MODEL_PATH);
             Console.WriteLine("Loaded model");
+
+            db.Results.RemoveRange(db.Results);
+            db.ResultsData.RemoveRange(db.ResultsData);
+            db.SaveChanges();
         }
 
         // Write file to temp location & check the db, read file as image & process
@@ -102,7 +110,7 @@ namespace ASPServer {
                 lock (db) {
                     Result val = null;
                     var pat = System.IO.Directory.GetCurrentDirectory();
-                    foreach (var p in db.Results) {
+                    foreach (var p in db.Results.Include(p => p.resultData)) {
                         if (ComputeHash(p.resultData.file) == ComputeHash(image) && p.resultData.file.SequenceEqual(image)) {
                             val = p;
                             break;
@@ -119,7 +127,8 @@ namespace ASPServer {
 
                     return new Tuple<int, int>(val.ClassId, val.CallCount);
                 }
-            } catch {
+            } catch (Exception e) {
+                Trace.WriteLine(e);
                 return null;
             }
         }
@@ -128,10 +137,17 @@ namespace ASPServer {
         private void PersistentAdd(byte[] image, int id) {
             try {
                 lock (db) {
-                    db.Add(new Result { CallCount = 0, ClassId = id, resultData = new ResultData { file = image } });
+                    ResultData rd = new ResultData { file = image };
+                    Result r = new Result { CallCount = 0, ClassId = id };
+                    r.resultData = rd;
+
+                    db.Results.Add(r);
+                    db.ResultsData.Add(rd);
                     db.SaveChanges();
                 }
-            } catch { }
+            } catch (Exception e) {
+                Trace.WriteLine(e);
+            }
         }
 
         private Tensor<float> ToTensor(byte[] file) {
