@@ -1,10 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="Current">
   <PropertyGroup>
     <TargetFramework>netcoreapp3.0</TargetFramework>
     <Platforms>AnyCPU;x64</Platforms>
+    <FileUpgradeFlags>40</FileUpgradeFlags>
+    <UpgradeBackupLocation>E:\Projects\VisualStudio\Practicum\s02170545\Backup\ResNetMatcher\</UpgradeBackupLocation>
+    <OldToolsVersion>2.0</OldToolsVersion>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="5.0.0">
@@ -17,5 +18,4 @@
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.5.1" />
     <PackageReference Include="SixLabors.ImageSharp" Version="1.0.1" />
   </ItemGroup>
-
 </Project>
