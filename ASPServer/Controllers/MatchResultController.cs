@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Diagnostics;
 
 namespace ASPServer.Controllers {
 
@@ -8,7 +9,7 @@ namespace ASPServer.Controllers {
     public class MatchResultController : ControllerBase {
 
         [HttpDelete]
-        public string GetMatch() {
+        public string DeleteMatch() {
             lock (Matcher.Instance.db) { 
                 Matcher.Instance.db.Results.RemoveRange(Matcher.Instance.db.Results);
                 Matcher.Instance.db.SaveChanges();
@@ -17,8 +18,7 @@ namespace ASPServer.Controllers {
         }
 
         [HttpPut]
-        public ActionResult<MatchResult> GetMatch([FromBody] string base64data) {
-            Console.WriteLine("Match : " + base64data);
+        public ActionResult<MatchResult> PutMatch([FromBody] string base64data) {
             try {
                 byte[] file = Convert.FromBase64String(base64data);
                 Tuple<int, int> res = Matcher.Instance.Match(file);

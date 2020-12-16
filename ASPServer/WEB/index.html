@@ -1,0 +1,125 @@
+<html>
+	<head>
+		<meta http-equiv="refresh" content="100000">
+		<script type="text/javascript">
+			var BASE_URL = 'http://localhost:5000';
+
+			function showClass() {
+				var classId = document.getElementById('classId').value;
+				var classImages = document.getElementById('classImages');
+				var url = BASE_URL + '/api/statistics';
+    
+				// Request class statistics
+				var xhr = new XMLHttpRequest();
+				xhr.responseType = 'json';
+				xhr.open('GET', url, true);
+				xhr.setRequestHeader("Content-type", "application/json");
+    
+				xhr.onload = function() {
+					var status = xhr.status;
+					
+					if (status == 200) {
+					console.log(classId);
+						if (classId <= 0 || classId >= xhr.response.length)
+							return;
+			
+					console.log("2");
+						var html = ''
+						for (var i = 0; i < xhr.response[classId]; ++i) {
+					console.log("3");
+							var url = BASE_URL + '/api/statsimage/' + classId + '/' + i;
+							html += '<img src="' + url + '"><br>';
+						}
+			
+					console.log("4");
+						classImages.innerHTML = html;
+						//var win = window.open("", "Class " + classId);
+						//win.document.body.innerHTML = html;
+					}
+				};
+    
+				xhr.send();
+			}
+
+			function showClasses() {
+				var url = BASE_URL + '/api/statistics';
+    
+				// Request class statistics
+				var xhr = new XMLHttpRequest();
+				xhr.responseType = 'json';
+				xhr.open('GET', url, true);
+				xhr.setRequestHeader("Content-type", "application/json");
+    
+				xhr.onload = function() {
+					var status = xhr.status;
+        
+					if (status == 200) {
+						if (classId <= 0 || classId >= xhr.response.length)
+							return;
+			
+						var html = '<table id="classStatistics" border="1"><tr><th>ClassId</th><th>Count</th></tr>';
+						for (var i = 0; i < xhr.response.length; ++i)
+							html += '<tr><th>' + i + '</th><th>' + xhr.response[i] + '</th></tr>';
+						html += '</table>';
+			
+						var win = window.open("", "Class statistics");
+						win.document.body.innerHTML = html;
+					}
+				};
+    
+				xhr.send();
+			}
+
+			async function submitFile() {
+				var button = document.getElementById('submitFile');
+				var result = document.getElementById('uploadResult');
+				button.enabled = false;
+	
+				let file = document.getElementById("fileInput").files[0];
+				result.innerHTML = '<img src="' + URL.createObjectURL(file) + '">';
+				let xhr = new XMLHttpRequest();
+
+				const toBase64 = file => new Promise((resolve, reject) => {
+					const reader = new FileReader();
+					reader.readAsDataURL(file);
+					reader.onload = () => resolve(reader.result);
+					reader.onerror = error => reject(error);
+				});
+       
+				xhr.responseType = 'json';                   
+				xhr.open("PUT", BASE_URL + '/api/matchresult');
+				xhr.setRequestHeader("Content-type", "application/json");
+	
+				xhr.onload = function() {
+					var status = xhr.status;
+        
+					button.enabled = true;
+		
+					if (status == 200) {
+						result.innerHTML += '<p>ClassId: ' + xhr.response.classId + ', Count: ' + xhr.response.statistics + '</p>';
+					} else
+						result.innerHTML += '<p>Error</p>';
+				};
+	
+				xhr.send('"' + (await toBase64(file)).split(',')[1] + '"');
+			}
+		</script>
+	</head>
+	<body>
+		<div style="border: 1px solid black;">
+			<label>ClassId:</label>
+			<input type="number" id="classId" value="0">
+			<input type="button" value="Show images" onclick="showClass()">
+			<br>
+			<input type="button" value="Show classes statistics" onclick="showClasses()">
+		</div>
+		<div style="border: 1px solid black;">
+			<input type="file" id="fileInput">
+			<input type="button" value="Upload image" onclick="submitFile()" id="submitFile">
+			<br>
+			<div id="uploadResult">Sample Text</div>
+		</div>
+		<div style="border: 1px solid black;" id="classImages">
+		</div>
+	</body>
+</html>

@@ -63,9 +63,9 @@ namespace ASPServer {
             session = new InferenceSession(MODEL_PATH);
             Console.WriteLine("Loaded model");
 
-            db.Results.RemoveRange(db.Results);
-            db.ResultsData.RemoveRange(db.ResultsData);
-            db.SaveChanges();
+            //db.Results.RemoveRange(db.Results);
+            //db.ResultsData.RemoveRange(db.ResultsData);
+            //db.SaveChanges();
         }
 
         // Write file to temp location & check the db, read file as image & process
