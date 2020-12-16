@@ -10,8 +10,9 @@
     
 				// Request class statistics
 				var xhr = new XMLHttpRequest();
-				xhr.open('GET', url, true);
 				xhr.responseType = 'json';
+				xhr.open('GET', url, true);
+				xhr.setRequestHeader("Content-type", "application/json");
     
 				xhr.onload = function() {
 					var status = xhr.status;
@@ -39,8 +40,9 @@
     
 				// Request class statistics
 				var xhr = new XMLHttpRequest();
-				xhr.open('GET', url, true);
 				xhr.responseType = 'json';
+				xhr.open('GET', url, true);
+				xhr.setRequestHeader("Content-type", "application/json");
     
 				xhr.onload = function() {
 					var status = xhr.status;
@@ -70,7 +72,6 @@
 				let file = document.getElementById("fileInput").files[0];
 				result.innerHTML = '<img src="' + URL.createObjectURL(file) + '">';
 				let xhr = new XMLHttpRequest();
-				let formData = new FormData();
 
 				const toBase64 = file => new Promise((resolve, reject) => {
 					const reader = new FileReader();
@@ -78,22 +79,10 @@
 					reader.onload = () => resolve(reader.result);
 					reader.onerror = error => reject(error);
 				});
-
-				//formData.append(await toBase64(file));             
+       
 				xhr.responseType = 'json';                   
 				xhr.open("PUT", BASE_URL + '/api/matchresult');
-    
-				//const response = fetch(BASE_URL + '/api/matchresult', {
-				//	method: 'PUT',
-				//	headers: {
-				//		'Content-Type': 'application/json'
-				//	},
-				//	body: JSON.stringify(await toBase64(file)) 
-				//});
-				//
-				//await response.json().then((data) => {
-				//	console.log(data);
-				//});
+				xhr.setRequestHeader("Content-type", "application/json");
 	
 				xhr.onload = function() {
 					var status = xhr.status;
@@ -106,7 +95,7 @@
 						result.innerHTML += '<p>Error</p>';
 				};
 	
-				xhr.send(await toBase64(file));
+				xhr.send('"' + (await toBase64(file)).split(',')[1] + '"');
 			}
 		</script>
 	</head>
