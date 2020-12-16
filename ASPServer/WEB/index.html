@@ -6,6 +6,7 @@
 
 			function showClass() {
 				var classId = document.getElementById('classId').value;
+				var classImages = document.getElementById('classImages');
 				var url = BASE_URL + '/api/statistics';
     
 				// Request class statistics
@@ -16,19 +17,24 @@
     
 				xhr.onload = function() {
 					var status = xhr.status;
-        
+					
 					if (status == 200) {
+					console.log(classId);
 						if (classId <= 0 || classId >= xhr.response.length)
 							return;
 			
+					console.log("2");
 						var html = ''
 						for (var i = 0; i < xhr.response[classId]; ++i) {
-							var url = BASE_URL + '/api/' + classId.value + '/' + i;
+					console.log("3");
+							var url = BASE_URL + '/api/statsimage/' + classId + '/' + i;
 							html += '<img src="' + url + '"><br>';
 						}
 			
-						var win = window.open("", "Class " + classId);
-						win.document.body.innerHTML = html;
+					console.log("4");
+						classImages.innerHTML = html;
+						//var win = window.open("", "Class " + classId);
+						//win.document.body.innerHTML = html;
 					}
 				};
     
@@ -112,6 +118,8 @@
 			<input type="button" value="Upload image" onclick="submitFile()" id="submitFile">
 			<br>
 			<div id="uploadResult">Sample Text</div>
+		</div>
+		<div style="border: 1px solid black;" id="classImages">
 		</div>
 	</body>
 </html>
